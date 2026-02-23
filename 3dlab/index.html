@@ -3,54 +3,36 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>FPS Loader</title>
+    <title>FPS Tactical Stance</title>
     <style>
-        body { margin: 0; overflow: hidden; background-color: #000; font-family: 'Segoe UI', sans-serif; }
-        
-        /* Loading Overlay */
+        body { margin: 0; overflow: hidden; background-color: #000; font-family: sans-serif; }
         #loader-container {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
             background: #111; display: flex; flex-direction: column;
-            justify-content: center; align-items: center; z-index: 100;
-            color: white; transition: opacity 0.5s ease;
+            justify-content: center; align-items: center; z-index: 100; color: white;
         }
-        #progress-wrapper {
-            width: 300px; height: 10px; background: #333;
-            border-radius: 5px; overflow: hidden; margin-top: 20px;
-        }
-        #progress-bar {
-            width: 0%; height: 100%; background: #00ff88;
-            box-shadow: 0 0 15px #00ff88; transition: width 0.1s;
-        }
-
-        /* Game UI */
+        #progress-wrapper { width: 300px; height: 6px; background: #333; margin-top: 20px; }
+        #progress-bar { width: 0%; height: 100%; background: #00ff88; transition: width 0.1s; }
         #instructions {
             position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            color: white; background: rgba(0,0,0,0.7); padding: 30px; text-align: center;
-            cursor: pointer; border: 1px solid #00ff88; display: none;
+            color: white; background: rgba(0,0,0,0.8); padding: 30px; text-align: center;
+            border: 1px solid #00ff88; display: none; cursor: pointer;
         }
         #crosshair {
-            position: absolute; top: 50%; left: 50%; width: 20px; height: 20px;
-            border: 2px solid rgba(0, 255, 136, 0.5); border-radius: 50%;
-            transform: translate(-50%, -50%); pointer-events: none;
+            position: absolute; top: 50%; left: 50%; width: 10px; height: 10px;
+            border: 2px solid #00ff88; border-radius: 50%; transform: translate(-50%, -50%);
+            pointer-events: none; opacity: 0.7;
         }
     </style>
 </head>
 <body>
 
 <div id="loader-container">
-    <div id="status">INITIALIZING ARMORY...</div>
-    <div id="progress-wrapper">
-        <div id="progress-bar"></div>
-    </div>
+    <div id="status">CALIBRATING WEAPON SYSTEMS...</div>
+    <div id="progress-wrapper"><div id="progress-bar"></div></div>
 </div>
 
-<div id="instructions">
-    <h1 style="color: #00ff88;">EQUIPMENT READY</h1>
-    <p>CLICK TO ENTER PERSPECTIVE</p>
-    <p style="font-size: 0.8em; color: #888;">WASD TO MOVE | MOUSE TO LOOK</p>
-</div>
-
+<div id="instructions"><h1>CLICK TO START</h1><p>WASD + MOUSE</p></div>
 <div id="crosshair"></div>
 
 <script type="importmap">
@@ -67,85 +49,67 @@
     import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
     import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
 
-    // UI Elements
-    const progressBar = document.getElementById('progress-bar');
-    const loaderContainer = document.getElementById('loader-container');
-    const instructions = document.getElementById('instructions');
-
-    // Scene & Camera
+    // Setup
     const scene = new THREE.Scene();
-    scene.fog = new THREE.FogExp2(0x111111, 0.1);
-    
     const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
     document.body.appendChild(renderer.domElement);
 
-    scene.add(new THREE.AmbientLight(0xffffff, 0.4));
-    const light = new THREE.PointLight(0x00ff88, 10, 50); // Cool neon light
-    light.position.set(5, 5, 5);
+    scene.add(new THREE.AmbientLight(0xffffff, 0.5));
+    const light = new THREE.DirectionalLight(0xffffff, 1);
+    light.position.set(5, 10, 5);
     scene.add(light);
 
-    // Player Group
+    // Player & Weapon Group
     const player = new THREE.Group();
     scene.add(player);
+    player.add(camera);
+    camera.position.set(0, 1.7, 0);
 
+    // The Arm Pivot (This will "sway")
     const armPivot = new THREE.Group();
-    armPivot.position.set(0.45, 1.45, -0.3); 
-    player.add(armPivot);
+    armPivot.position.set(0.4, 1.3, -0.4); 
+    camera.add(armPivot); // Parented to CAMERA so it follows look direction
 
-    const arm = new THREE.Mesh(
-        new THREE.BoxGeometry(0.18, 0.18, 0.8),
+    // Block Arm
+    const armMesh = new THREE.Mesh(
+        new THREE.BoxGeometry(0.15, 0.15, 0.7),
         new THREE.MeshStandardMaterial({ color: 0xffdbac })
     );
-    arm.position.z = -0.3;
-    armPivot.add(arm);
-
-    camera.position.set(0, 1.7, 0);
-    player.add(camera);
+    armMesh.position.z = -0.2;
+    armPivot.add(armMesh);
 
     // Controls
     const controls = new PointerLockControls(camera, document.body);
+    const instructions = document.getElementById('instructions');
     instructions.addEventListener('click', () => controls.lock());
     controls.addEventListener('lock', () => instructions.style.display = 'none');
     controls.addEventListener('unlock', () => instructions.style.display = 'block');
 
-    // --- Loading with Progress Bar ---
+    // Loader
     const loader = new GLTFLoader();
-    
-    loader.load(
-        './files/3d/gun.glb',
-        (gltf) => {
-            // SUCCESS
-            const gun = gltf.scene;
-            armPivot.add(gun);
-            gun.position.set(0, 0, -0.8);
-            gun.rotation.set(Math.PI / 2, Math.PI, 0); 
-            gun.scale.set(0.8, 0.8, 0.8); // Bigger gun per your request
+    loader.load('./files/3d/gun.glb', (gltf) => {
+        const gun = gltf.scene;
+        armPivot.add(gun);
+        
+        // POSITIONAL FIX: Gun pointing FORWARD
+        gun.position.set(0, 0.05, -0.5); 
+        // We set x to 0 and y to Math.PI to fix the upward tilt and face away from player
+        gun.rotation.set(0, Math.PI, 0); 
+        gun.scale.set(0.8, 0.8, 0.8);
 
-            // Fade out loader and show instructions
-            loaderContainer.style.opacity = '0';
-            setTimeout(() => {
-                loaderContainer.style.display = 'none';
-                instructions.style.display = 'block';
-            }, 500);
-        },
-        (xhr) => {
-            // PROGRESS
-            const percent = (xhr.loaded / xhr.total) * 100;
-            progressBar.style.width = percent + '%';
-        },
-        (error) => {
-            console.error('Error loading gun:', error);
-            document.getElementById('status').innerText = "LOAD ERROR";
-        }
-    );
+        document.getElementById('loader-container').style.display = 'none';
+        instructions.style.display = 'block';
+    }, (xhr) => {
+        const percent = (xhr.loaded / xhr.total) * 100;
+        document.getElementById('progress-bar').style.width = percent + '%';
+    });
 
     // Environment
-    const grid = new THREE.GridHelper(100, 100, 0x00ff88, 0x222222);
-    scene.add(grid);
+    scene.add(new THREE.GridHelper(50, 50, 0x00ff88, 0x333333));
 
-    // Basic Movement Logic
+    // Movement Variables
     let moveF = false, moveB = false, moveL = false, moveR = false;
     document.addEventListener('keydown', (e) => {
         if(e.code === 'KeyW') moveF = true; if(e.code === 'KeyS') moveB = true;
@@ -159,12 +123,17 @@
     const velocity = new THREE.Vector3();
     let prevTime = performance.now();
 
+    // Procedural Animation Variables
+    let stepCycle = 0;
+    const baseArmPos = new THREE.Vector3(0.4, -0.4, -0.4); // Local to camera
+
     function animate() {
         requestAnimationFrame(animate);
         const time = performance.now();
         const delta = (time - prevTime) / 1000;
 
         if (controls.isLocked) {
+            // Movement physics
             velocity.x -= velocity.x * 10.0 * delta;
             velocity.z -= velocity.z * 10.0 * delta;
 
@@ -175,6 +144,21 @@
 
             controls.moveRight(-velocity.x * delta);
             controls.moveForward(-velocity.z * delta);
+
+            // --- ARM SWAY & BOBBING ---
+            const isMoving = moveF || moveB || moveL || moveR;
+            if (isMoving) {
+                stepCycle += delta * 10; // Speed of the bobbing
+            } else {
+                stepCycle *= 0.9; // Smoothly stop bobbing
+            }
+
+            // Bob up and down (Y) and side to side (X)
+            armPivot.position.y = 1.3 + Math.sin(stepCycle) * 0.02;
+            armPivot.position.x = 0.4 + Math.cos(stepCycle * 0.5) * 0.01;
+
+            // Subtle rotation sway
+            armPivot.rotation.z = Math.sin(stepCycle * 0.5) * 0.02;
         }
 
         renderer.render(scene, camera);
