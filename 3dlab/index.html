@@ -3,13 +3,55 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tactical Block Humanoid</title>
+    <title>FPS Loader</title>
     <style>
-        body { margin: 0; overflow: hidden; background-color: #1a1a1a; }
-        canvas { display: block; }
+        body { margin: 0; overflow: hidden; background-color: #000; font-family: 'Segoe UI', sans-serif; }
+        
+        /* Loading Overlay */
+        #loader-container {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: #111; display: flex; flex-direction: column;
+            justify-content: center; align-items: center; z-index: 100;
+            color: white; transition: opacity 0.5s ease;
+        }
+        #progress-wrapper {
+            width: 300px; height: 10px; background: #333;
+            border-radius: 5px; overflow: hidden; margin-top: 20px;
+        }
+        #progress-bar {
+            width: 0%; height: 100%; background: #00ff88;
+            box-shadow: 0 0 15px #00ff88; transition: width 0.1s;
+        }
+
+        /* Game UI */
+        #instructions {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            color: white; background: rgba(0,0,0,0.7); padding: 30px; text-align: center;
+            cursor: pointer; border: 1px solid #00ff88; display: none;
+        }
+        #crosshair {
+            position: absolute; top: 50%; left: 50%; width: 20px; height: 20px;
+            border: 2px solid rgba(0, 255, 136, 0.5); border-radius: 50%;
+            transform: translate(-50%, -50%); pointer-events: none;
+        }
     </style>
 </head>
 <body>
+
+<div id="loader-container">
+    <div id="status">INITIALIZING ARMORY...</div>
+    <div id="progress-wrapper">
+        <div id="progress-bar"></div>
+    </div>
+</div>
+
+<div id="instructions">
+    <h1 style="color: #00ff88;">EQUIPMENT READY</h1>
+    <p>CLICK TO ENTER PERSPECTIVE</p>
+    <p style="font-size: 0.8em; color: #888;">WASD TO MOVE | MOUSE TO LOOK</p>
+</div>
+
+<div id="crosshair"></div>
 
 <script type="importmap">
     {
@@ -23,116 +65,120 @@
 <script type="module">
     import * as THREE from 'three';
     import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+    import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
 
-    // --- Scene Setup ---
+    // UI Elements
+    const progressBar = document.getElementById('progress-bar');
+    const loaderContainer = document.getElementById('loader-container');
+    const instructions = document.getElementById('instructions');
+
+    // Scene & Camera
     const scene = new THREE.Scene();
+    scene.fog = new THREE.FogExp2(0x111111, 0.1);
+    
     const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-    camera.position.set(1.5, 1.8, 3);
-
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.setPixelRatio(window.devicePixelRatio);
-    renderer.shadowMap.enabled = true;
     document.body.appendChild(renderer.domElement);
 
-    const controls = new OrbitControls(camera, renderer.domElement);
-    controls.target.set(0, 1.4, 0);
+    scene.add(new THREE.AmbientLight(0xffffff, 0.4));
+    const light = new THREE.PointLight(0x00ff88, 10, 50); // Cool neon light
+    light.position.set(5, 5, 5);
+    scene.add(light);
 
-    // --- Lighting ---
-    scene.add(new THREE.AmbientLight(0xffffff, 0.6));
-    const sun = new THREE.DirectionalLight(0xffffff, 1.2);
-    sun.position.set(5, 10, 5);
-    sun.castShadow = true;
-    scene.add(sun);
+    // Player Group
+    const player = new THREE.Group();
+    scene.add(player);
 
-    // --- Materials ---
-    const shirtMat = new THREE.MeshStandardMaterial({ color: 0x2c3e50 });
-    const skinMat = new THREE.MeshStandardMaterial({ color: 0xffdbac });
-    const eyeMat = new THREE.MeshStandardMaterial({ color: 0x000000 });
+    const armPivot = new THREE.Group();
+    armPivot.position.set(0.45, 1.45, -0.3); 
+    player.add(armPivot);
 
-    // --- Build Detailed Humanoid ---
-    const humanoid = new THREE.Group();
+    const arm = new THREE.Mesh(
+        new THREE.BoxGeometry(0.18, 0.18, 0.8),
+        new THREE.MeshStandardMaterial({ color: 0xffdbac })
+    );
+    arm.position.z = -0.3;
+    armPivot.add(arm);
 
-    // Torso (Tapered)
-    const torso = new THREE.Mesh(new THREE.BoxGeometry(0.7, 1.0, 0.4), shirtMat);
-    torso.position.y = 1.3;
-    humanoid.add(torso);
+    camera.position.set(0, 1.7, 0);
+    player.add(camera);
 
-    // Head with "Eyes"
-    const headGroup = new THREE.Group();
-    headGroup.position.y = 2.0;
-    const headBase = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.45, 0.45), skinMat);
-    headGroup.add(headBase);
+    // Controls
+    const controls = new PointerLockControls(camera, document.body);
+    instructions.addEventListener('click', () => controls.lock());
+    controls.addEventListener('lock', () => instructions.style.display = 'none');
+    controls.addEventListener('unlock', () => instructions.style.display = 'block');
 
-    // Simple Face (Eyes)
-    const eyeGeo = new THREE.BoxGeometry(0.08, 0.08, 0.02);
-    const eyeL = new THREE.Mesh(eyeGeo, eyeMat);
-    eyeL.position.set(-0.1, 0.05, 0.22);
-    const eyeR = eyeL.clone();
-    eyeR.position.x = 0.1;
-    headGroup.add(eyeL, eyeR);
-    humanoid.add(headGroup);
-
-    // --- Arms (The Aiming Logic) ---
-    // Right Arm (Trigger Arm)
-    const rShoulder = new THREE.Group();
-    rShoulder.position.set(-0.45, 1.7, 0);
-    humanoid.add(rShoulder);
-
-    const rArm = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.7, 0.18), skinMat);
-    rArm.position.y = -0.3;
-    rShoulder.add(rArm);
-
-    // Left Arm (Supporting Grip)
-    const lShoulder = new THREE.Group();
-    lShoulder.position.set(0.45, 1.7, 0);
-    humanoid.add(lShoulder);
-
-    const lArm = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.7, 0.18), skinMat);
-    lArm.position.y = -0.3;
-    lShoulder.add(lArm);
-
-    // Positioning arms into a "Two-Handed Grip" stance
-    rShoulder.rotation.x = -Math.PI / 2; // Point forward
-    rShoulder.rotation.z = 0.1;
-
-    lShoulder.rotation.x = -1.4; 
-    lShoulder.rotation.y = -0.5; // Reach across to the gun
-    lShoulder.rotation.z = -0.2;
-
-    scene.add(humanoid);
-
-    // --- Load Gun ---
+    // --- Loading with Progress Bar ---
     const loader = new GLTFLoader();
-    loader.load('./files/3d/gun.glb', (gltf) => {
-        const gun = gltf.scene;
-        
-        // Parent gun to the right shoulder so it moves with the arm
-        rShoulder.add(gun);
+    
+    loader.load(
+        './files/3d/gun.glb',
+        (gltf) => {
+            // SUCCESS
+            const gun = gltf.scene;
+            armPivot.add(gun);
+            gun.position.set(0, 0, -0.8);
+            gun.rotation.set(Math.PI / 2, Math.PI, 0); 
+            gun.scale.set(0.8, 0.8, 0.8); // Bigger gun per your request
 
-        // TRANSFORM: Fixing the inversion and size
-        gun.position.set(0, -0.75, 0); 
-        // Rotation: y: Math.PI flips it away from the face, 
-        // x: Math.PI/2 aligns it with the outstretched arm
-        gun.rotation.set(Math.PI / 2, Math.PI, 0); 
-        gun.scale.set(0.6, 0.6, 0.6); // Increased size
-    });
+            // Fade out loader and show instructions
+            loaderContainer.style.opacity = '0';
+            setTimeout(() => {
+                loaderContainer.style.display = 'none';
+                instructions.style.display = 'block';
+            }, 500);
+        },
+        (xhr) => {
+            // PROGRESS
+            const percent = (xhr.loaded / xhr.total) * 100;
+            progressBar.style.width = percent + '%';
+        },
+        (error) => {
+            console.error('Error loading gun:', error);
+            document.getElementById('status').innerText = "LOAD ERROR";
+        }
+    );
 
-    // --- Background / Target ---
-    loader.load('./files/3d/target.glb', (gltf) => {
-        gltf.scene.position.set(0, 1.5, -5);
-        scene.add(gltf.scene);
-    });
-
-    // Floor
-    const grid = new THREE.GridHelper(20, 20, 0x444444, 0x222222);
+    // Environment
+    const grid = new THREE.GridHelper(100, 100, 0x00ff88, 0x222222);
     scene.add(grid);
+
+    // Basic Movement Logic
+    let moveF = false, moveB = false, moveL = false, moveR = false;
+    document.addEventListener('keydown', (e) => {
+        if(e.code === 'KeyW') moveF = true; if(e.code === 'KeyS') moveB = true;
+        if(e.code === 'KeyA') moveL = true; if(e.code === 'KeyD') moveR = true;
+    });
+    document.addEventListener('keyup', (e) => {
+        if(e.code === 'KeyW') moveF = false; if(e.code === 'KeyS') moveB = false;
+        if(e.code === 'KeyA') moveL = false; if(e.code === 'KeyD') moveR = false;
+    });
+
+    const velocity = new THREE.Vector3();
+    let prevTime = performance.now();
 
     function animate() {
         requestAnimationFrame(animate);
-        controls.update();
+        const time = performance.now();
+        const delta = (time - prevTime) / 1000;
+
+        if (controls.isLocked) {
+            velocity.x -= velocity.x * 10.0 * delta;
+            velocity.z -= velocity.z * 10.0 * delta;
+
+            if (moveF) velocity.z -= 40.0 * delta;
+            if (moveB) velocity.z += 40.0 * delta;
+            if (moveL) velocity.x -= 40.0 * delta;
+            if (moveR) velocity.x += 40.0 * delta;
+
+            controls.moveRight(-velocity.x * delta);
+            controls.moveForward(-velocity.z * delta);
+        }
+
         renderer.render(scene, camera);
+        prevTime = time;
     }
     animate();
 
