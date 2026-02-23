@@ -3,9 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Block Humanoid Aiming</title>
+    <title>Tactical Block Humanoid</title>
     <style>
-        body { margin: 0; overflow: hidden; background-color: #222; }
+        body { margin: 0; overflow: hidden; background-color: #1a1a1a; }
         canvas { display: block; }
     </style>
 </head>
@@ -28,70 +28,105 @@
     // --- Scene Setup ---
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-    camera.position.set(2, 2, 4);
+    camera.position.set(1.5, 1.8, 3);
 
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.setPixelRatio(window.devicePixelRatio);
+    renderer.shadowMap.enabled = true;
     document.body.appendChild(renderer.domElement);
 
     const controls = new OrbitControls(camera, renderer.domElement);
-    scene.add(new THREE.AmbientLight(0xffffff, 0.8));
-    const sun = new THREE.DirectionalLight(0xffffff, 1.5);
+    controls.target.set(0, 1.4, 0);
+
+    // --- Lighting ---
+    scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+    const sun = new THREE.DirectionalLight(0xffffff, 1.2);
     sun.position.set(5, 10, 5);
+    sun.castShadow = true;
     scene.add(sun);
 
-    // --- Build the Block Humanoid ---
-    const humanoid = new THREE.Group();
-    const bodyMat = new THREE.MeshStandardMaterial({ color: 0x3498db });
+    // --- Materials ---
+    const shirtMat = new THREE.MeshStandardMaterial({ color: 0x2c3e50 });
     const skinMat = new THREE.MeshStandardMaterial({ color: 0xffdbac });
+    const eyeMat = new THREE.MeshStandardMaterial({ color: 0x000000 });
 
-    // Torso
-    const torso = new THREE.Mesh(new THREE.BoxGeometry(0.8, 1.2, 0.4), bodyMat);
-    torso.position.y = 1.2;
+    // --- Build Detailed Humanoid ---
+    const humanoid = new THREE.Group();
+
+    // Torso (Tapered)
+    const torso = new THREE.Mesh(new THREE.BoxGeometry(0.7, 1.0, 0.4), shirtMat);
+    torso.position.y = 1.3;
     humanoid.add(torso);
 
-    // Head
-    const head = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.4, 0.4), skinMat);
-    head.position.y = 2.0;
-    humanoid.add(head);
+    // Head with "Eyes"
+    const headGroup = new THREE.Group();
+    headGroup.position.y = 2.0;
+    const headBase = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.45, 0.45), skinMat);
+    headGroup.add(headBase);
 
-    // Right Arm Pivot (This is the shoulder)
-    const rightArmPivot = new THREE.Group();
-    rightArmPivot.position.set(-0.5, 1.7, 0); // Position at shoulder
-    humanoid.add(rightArmPivot);
+    // Simple Face (Eyes)
+    const eyeGeo = new THREE.BoxGeometry(0.08, 0.08, 0.02);
+    const eyeL = new THREE.Mesh(eyeGeo, eyeMat);
+    eyeL.position.set(-0.1, 0.05, 0.22);
+    const eyeR = eyeL.clone();
+    eyeR.position.x = 0.1;
+    headGroup.add(eyeL, eyeR);
+    humanoid.add(headGroup);
 
-    const rightArm = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.8, 0.2), skinMat);
-    rightArm.position.y = -0.3; // Offset so it rotates around the shoulder
-    rightArmPivot.add(rightArm);
+    // --- Arms (The Aiming Logic) ---
+    // Right Arm (Trigger Arm)
+    const rShoulder = new THREE.Group();
+    rShoulder.position.set(-0.45, 1.7, 0);
+    humanoid.add(rShoulder);
 
-    // Point the arm forward (Aiming)
-    rightArmPivot.rotation.x = -Math.PI / 2; 
+    const rArm = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.7, 0.18), skinMat);
+    rArm.position.y = -0.3;
+    rShoulder.add(rArm);
+
+    // Left Arm (Supporting Grip)
+    const lShoulder = new THREE.Group();
+    lShoulder.position.set(0.45, 1.7, 0);
+    humanoid.add(lShoulder);
+
+    const lArm = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.7, 0.18), skinMat);
+    lArm.position.y = -0.3;
+    lShoulder.add(lArm);
+
+    // Positioning arms into a "Two-Handed Grip" stance
+    rShoulder.rotation.x = -Math.PI / 2; // Point forward
+    rShoulder.rotation.z = 0.1;
+
+    lShoulder.rotation.x = -1.4; 
+    lShoulder.rotation.y = -0.5; // Reach across to the gun
+    lShoulder.rotation.z = -0.2;
 
     scene.add(humanoid);
 
-    // --- Load the Gun ---
+    // --- Load Gun ---
     const loader = new GLTFLoader();
     loader.load('./files/3d/gun.glb', (gltf) => {
         const gun = gltf.scene;
         
-        // Attach gun to the arm so it follows the arm's rotation
-        rightArmPivot.add(gun);
+        // Parent gun to the right shoulder so it moves with the arm
+        rShoulder.add(gun);
 
-        // Position gun at the "hand" (bottom of the arm box)
-        gun.position.set(0, -0.7, 0); 
+        // TRANSFORM: Fixing the inversion and size
+        gun.position.set(0, -0.75, 0); 
+        // Rotation: y: Math.PI flips it away from the face, 
+        // x: Math.PI/2 aligns it with the outstretched arm
         gun.rotation.set(Math.PI / 2, Math.PI, 0); 
-        gun.scale.set(0.3, 0.3, 0.3);
+        gun.scale.set(0.6, 0.6, 0.6); // Increased size
     });
 
-    // --- Background Assets ---
+    // --- Background / Target ---
     loader.load('./files/3d/target.glb', (gltf) => {
-        gltf.scene.position.set(-0.5, 1.5, -5);
+        gltf.scene.position.set(0, 1.5, -5);
         scene.add(gltf.scene);
     });
 
-    // Floor (optional, helps ground the scene)
-    const grid = new THREE.GridHelper(10, 10);
+    // Floor
+    const grid = new THREE.GridHelper(20, 20, 0x444444, 0x222222);
     scene.add(grid);
 
     function animate() {
